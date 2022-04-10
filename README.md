@@ -1,6 +1,10 @@
 # instagram-aio-tool
 **Instagram all in one tool, everything works except Account Creator is why I put it on github**
 
+**Flex**
+  - One of the only requests based instagram tools
+  - One of the fastest
+
 **Usage**
   - Open PackageInstaller.bat
   - Proxy format can be user:pass@host:port or host:port, change format by using the proxy formatter
@@ -20,3 +24,6 @@
   - Comment Bot
   - Proxy Formatter
   - (**Account Creator**)
+
+**Skids**
+  - Imagine skidding you clowns, learn to code
