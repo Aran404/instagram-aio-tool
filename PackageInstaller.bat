@@ -1,7 +1,4 @@
 @echo off
 title Installing Packages
-pip install colorama
-pip install fake_useragent
-pip install datetime
-pip install requests
+pip install colorama fake_useragent datetime requests
 pause
