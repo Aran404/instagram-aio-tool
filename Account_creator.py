@@ -1,235 +1,371 @@
-'''
-Developed by ! Aran#9999
-Redistrubuted by ! Kenny#9999, Jillo#0318
-'''
-
 # Imports
+from selenium_stealth import stealth
+from selenium import webdriver
+from selenium.common.exceptions import TimeoutException
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.ui import Select
+from selenium.webdriver.common.proxy import Proxy, ProxyType
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from colorama import Fore, init
 import string
-import requests
-import threading
-import os
 import time
 import random
-from fake_useragent import UserAgent
-from datetime import datetime
+import requests
+import os
 
-# Kopeechka
-class Email:
-    def __init__(self, api_key, domain, id) -> None:
+
+class Phone:
+    def __init__(self, api_key, phone_id) -> None:
         self.api_key = api_key
-        self.domain = domain
-        self.email_id = id
+        self.phone_id = phone_id
 
-    def get_email(self):
-        get_mail = requests.get(f'https://api.kopeechka.store/mailbox-get-email?api=2.0&spa=1&site=instagram.com&sender=instagram&regex=&mail_type={self.domain}&token={self.api_key}').json()
-        if get_mail['status'] == 'OK':
-            return {'mail': get_mail['mail'], 'id': get_mail['id']}
-        else:
-            return get_mail['value']
+    def get_number(self) -> dict:
+        token = self.api_key
+        country = "russia"
+        operator = "any"
+        product = "instagram"
 
-    # This part was taken from Hattorius
-    def checkEmail(self):
-        return requests.get('https://api.kopeechka.store/mailbox-get-message?full=1&spa=1&id=' + self.email_id + '&token=' + self.api_key).json()['value']
+        headers = {
+            "Authorization": "Bearer " + token,
+            "Accept": "application/json",
+        }
 
-    def deleteEmail(self):
-        requests.get('https://api.kopeechka.store/mailbox-cancel?id=' + self.email_id + '&token=' + self.api_key)
+        response = requests.get(
+            "https://5sim.net/v1/user/buy/activation/"
+            + country
+            + "/"
+            + operator
+            + "/"
+            + product,
+            headers=headers,
+        ).json()
 
-    def waitForEmail(self):
+        return {
+            "number": response["phone"],
+            "phone_id": response["id"],
+            "price": response["price"],
+        }
+
+    def get_balance(self) -> int:
+        token = self.api_key
+
+        headers = {
+            "Authorization": "Bearer " + token,
+            "Accept": "application/json",
+        }
+
+        return int(
+            round(
+                requests.get(
+                    "https://5sim.net/v1/user/profile", headers=headers
+                ).json()["balance"],
+                3,
+            )
+        )
+
+    def get_code(self):
+        token = self.api_key
+        c_id = self.phone_id
+
+        headers = {
+            "Authorization": "Bearer " + token,
+            "Accept": "application/json",
+        }
+
         tries = 0
         while tries < 30:
-            time.sleep(2)
-            value = self.checkEmail(self.email_id)
-            if value != 'WAIT_LINK':
-                self.deleteEmail(self.email_id)
-                return value.replace('\\', '')
-            tries += 1
+            response = requests.get(
+                "https://5sim.net/v1/user/check/" + str(c_id), headers=headers
+            ).json()
+            if response["status"] == "RECEIVED":
+                if response["sms"]:
+                    return response["sms"][0]["code"]
+            else:
+                time.sleep(2)
+                tries += 1
+
         return False
 
-class Creation:
-    def __init__(self, proxy, email, email_id) -> None:
-        self.session = requests.Session()
-        self.user_agent = UserAgent().random
-        self.email = email
-        self.email_id = email_id
+    def finish_order(self) -> None:
+        token = self.api_key
+        c_id = self.phone_id
+
+        headers = {
+            "Authorization": "Bearer " + token,
+            "Accept": "application/json",
+        }
+
+        requests.get("https://5sim.net/v1/user/finish/" + str(c_id), headers=headers)
+
+    def cancel_order(self) -> None:
+        token = self.api_key
+        c_id = self.phone_id
+
+        headers = {
+            "Authorization": "Bearer " + token,
+            "Accept": "application/json",
+        }
+
+        requests.get("https://5sim.net/v1/user/cancel/" + str(c_id), headers=headers)
+
+
+class Generator:
+    def __init__(self, proxy, api_key) -> None:
         self.proxy = proxy
+        self.api_key = api_key
 
-    def get_dob(self):
-        month = {
-            '1': 'January',
-            '2': 'February',
-            '3': 'March',
-            '4': 'April',
-            '5': 'May',
-            '6': 'June',
-            '7': 'July',
-            '8': 'August',
-            '9': 'September',
-            '10': 'October',
-            '11': 'November',
-            '12': 'Decemeber'
-        }
-        num = random.randint(1,12)
+        self.useragent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36"
 
-        return {'year': random.randint(1970,2000), 'month': month[str(num)], 'day': random.randint(1,27)}
+        self.username = "".join(
+            random.choice(string.ascii_letters + string.digits) for _ in range(10)
+        )
 
-    def create_headers(self):
-        self.proxy = 'a proxy'
-        self.session.proxies = self.proxy
+        self.fname = "".join(
+            random.choice(string.ascii_letters + string.digits) for _ in range(6)
+        )
 
-        if 'Macintosh' in self.user_agent:
-            self.os = 'Macintosh'
-        elif 'Windows' in self.user_agent:
-            self.os = 'Windows'
-        elif 'Linux' in self.user_agent:
-            self.os = 'Linux'
+        self.password = "".join(
+            random.choice(string.ascii_letters + string.digits) for _ in range(10)
+        )
+
+    def __init_driver__(self) -> None:
+        ser = Service(f"{os.getcwd()}\chromedriver.exe")
+        proxy_server = self.proxy
+
+        if proxy_server == False:
+            capabilities = None
         else:
-            self.os = 'undefined'
+            proxy = Proxy()
+            proxy.proxy_type = ProxyType.MANUAL
+            proxy.http_proxy = proxy_server
+            proxy.ssl_proxy = proxy_server
+            capabilities = webdriver.DesiredCapabilities.CHROME
+            proxy.add_to_capabilities(capabilities)
 
-        self.session.headers = {
-            'authority': 'www.instagram.com',
-            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
-            'accept-encoding': 'gzip, deflate, br',
-            'accept-language': 'en-CA,en;q=0.9',
-            'dnt': '1',
-            'sec-ch-ua': '" Not A;Brand";v="99", "Chromium";v="99", "Google Chrome";v="99"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': self.os,
-            'sec-fetch-dest': 'document',
-            'sec-fetch-mode': 'navigate',
-            'sec-fetch-site': 'none',
-            'sec-fetch-user': '?1',
-            'upgrade-insecure-requests': '1',
-            'user-agent': self.user_agent
+        # Spoofing to not get detected
+        options = Options()
+
+        options.add_experimental_option(
+            "excludeSwitches",
+            [
+                "enable-logging",
+                "enable-automation",
+                "ignore-certificate-errors",
+                "safebrowsing-disable-download-protection",
+                "safebrowsing-disable-auto-update",
+                "disable-client-side-phishing-detection",
+            ],
+        )
+
+        options.add_experimental_option("useAutomationExtension", False)
+        options.add_argument("--lang=en")
+        options.add_argument("--log-level=3")
+        options.add_argument("--incognito")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--profile-directory=Null")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_argument("--start-maximized")
+        options.add_argument(f"--user-agent={self.useragent}")
+        # options.add_argument("--headless")
+        # options.add_argument("--disable-gpu")
+
+        self.driver = webdriver.Chrome(
+            service=ser, desired_capabilities=capabilities, options=options
+        )
+
+        stealth(
+            self.driver,
+            languages=["en-US", "en"],
+            vendor="Google Inc.",
+            platform="Win32",
+            webgl_vendor="Intel Inc.",
+            renderer="Intel Iris OpenGL Engine",
+            fix_hairline=True,
+        )
+
+        self.driver.set_window_size(500, 570)
+
+        self.driver.execute_cdp_cmd(
+            "Network.setUserAgentOverride", {"userAgent": self.useragent}
+        )
+
+        self.driver.execute_cdp_cmd(
+            "Page.addScriptToEvaluateOnNewDocument",
+            {
+                "source": """
+            Object.defineProperty(navigator, 'deviceMemory', {
+            get: () => 99
+            })
+        """
+            },
+        )
+
+        self.driver.execute_cdp_cmd(
+            "Page.addScriptToEvaluateOnNewDocument",
+            {
+                "source": """
+                Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+                })
+            """
+            },
+        )
+
+    def get_dob(self) -> dict:
+        month = [
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "Decemeber",
+        ]
+
+        return {
+            "year": random.randint(1970, 2000),
+            "month": random.choice(month),
+            "day": random.randint(1, 27),
         }
 
-        request_data = self.session.get('https://www.instagram.com/accounts/emailsignup/', timeout=30)
-        self.trip_id = request_data.headers['x-fb-trip-id']
-        get_cookies = request_data.headers['set-cookie']
-        self.csrf = get_cookies.split('csrftoken=')[1].split(';')[0]
-        self.mid = get_cookies.split('mid=')[1].split(';')[0]
-        self.ig_did = get_cookies.split('ig_did=')[1].split(';')[0]
-        self.ig_nrcb = get_cookies.split('ig_nrcb=')[1].split(';')[0] 
+    def __main__(self) -> None:
+        self.__init_driver__()
+        self.driver.get("https://www.instagram.com/accounts/emailsignup/")
 
-        self.session.cookies['csrftoken'] = self.csrf
-        self.session.cookies['mid'] = self.mid
-        self.session.cookies['ig_did'] = self.ig_did
-        self.session.cookies['ig_nrcb'] = self.ig_nrcb
-        self.session.cookies['locale'] = 'en'
+        WebDriverWait(self.driver, 40).until(
+            EC.presence_of_element_located(
+                (
+                    By.XPATH,
+                    "//input[@name='emailOrPhone']",
+                )
+            )
+        )
 
-        self.cookie = f'csrftoken={self.csrf}; mid={self.mid}; ig_did={self.ig_did}; ig_nrcb={self.ig_nrcb}'
-        self.session.headers.update({'cookie': self.cookie})
-        self.session.headers.update({'x-csrftoken': self.csrf})
+        get_phone = Phone(self.api_key, None).get_number()
+        self.phone_num, self.phone_id = get_phone["number"], get_phone["phone_id"]
 
-        self.ASBD = self.session.get('https://www.instagram.com/static/bundles/es6/ConsumerLibCommons.js/19420d3b80dd.js').text.split("ASBD_ID='")[1].split("'}")[0]
-        self.APP_ID = self.session.get('https://www.instagram.com/static/bundles/es6/ConsumerLibCommons.js/19420d3b80dd.js').text.split("instagramWebDesktopFBAppId='")[1].split("',")[0]
-        self.rollout_hash = request_data.text.split('rollout_hash":"')[1].split('"')[0]
-        
-        self.session.headers.update({
-            'origin': 'https://www.instagram.com',
-            'referer': 'https://www.instagram.com/accounts/emailsignup/',
-            'x-asbd-id': self.ASBD,
-            'x-csrftoken': self.csrf,
-            'x-ig-app-id': self.APP_ID,
-            'x-ig-www-claim': '0',
-            'x-instagram-ajax': self.rollout_hash,
-            'x-requested-with': 'XMLHttpRequest'
-        })
+        for char in self.phone_num:
+            self.driver.find_element(
+                By.XPATH, "//input[@name='emailOrPhone']"
+            ).send_keys(char)
+            time.sleep(random.uniform(0.32, 0.62))
 
-    def create_account(self):
-        self.create_headers()
-        username = "".join(random.choice(string.ascii_letters + string.digits) for x in range(10))
-        first_name = "".join(random.choice(string.ascii_letters) for x in range(10))
+        for char in self.fname:
+            self.driver.find_element(By.XPATH, "//input[@name='fullName']").send_keys(
+                char
+            )
+            time.sleep(random.uniform(0.32, 0.62))
 
-        _ = self.session.post('https://www.instagram.com/accounts/web_create_ajax/attempt/', data={
-            'email': self.email,
-            'username': None,
-            'first_name': None,
-            'opt_into_one_tap': False
-        })
+        for char in self.username:
+            self.driver.find_element(By.XPATH, "//input[@name='username']").send_keys(
+                char
+            )
+            time.sleep(random.uniform(0.32, 0.62))
 
-        __ = self.session.post('https://www.instagram.com/accounts/web_create_ajax/attempt/', data={
-            'email': self.email,
-            'username': username,
-            'first_name': None,
-            'opt_into_one_tap': False
-        })
+        for char in self.password:
+            self.driver.find_element(By.XPATH, "//input[@name='password']").send_keys(
+                char
+            )
+            time.sleep(random.uniform(0.32, 0.62))
 
-        ___ = self.session.post('https://www.instagram.com/accounts/web_create_ajax/attempt/', data={
-            'email': self.email,
-            'username': username,
-            'first_name': first_name,
-            'opt_into_one_tap': False
-        })
+        WebDriverWait(self.driver, 40).until(
+            EC.element_to_be_clickable(
+                (
+                    By.CSS_SELECTOR,
+                    "button[type='submit']",
+                )
+            )
+        )
 
-        ____ = self.session.post('https://www.instagram.com/accounts/web_create_ajax/attempt/', data={
-            'enc_password': f'#PWD_INSTAGRAM_BROWSER:0:{int(datetime.now().timestamp())}:Ethanisnotcool123',
-            'email': self.email,
-            'username': username,
-            'first_name': first_name,
-            'client_id': self.mid,
-            'seamless_login_enabled': 1,
-            'opt_into_one_tap': False,
-        }, timeout=30)
+        time.sleep(random.uniform(1.1, 1.4))
 
-        day, month, year = str(self.get_dob()['day']), str(self.get_dob()['month']), str(self.get_dob()['year'])
+        self.driver.execute_script(
+            """
+            document.querySelector("button[type='submit']").click();
+        """
+        )
 
-        _____ = self.session.post('https://www.instagram.com/web/consent/check_age_eligibility/', data={
-            'day': day,
-            'month': month,
-            'year': year
-        })
+        WebDriverWait(self.driver, 40).until(
+            EC.presence_of_element_located(
+                (
+                    By.XPATH,
+                    "//select[@title='Month:']",
+                )
+            )
+        )
 
-        ______ = self.session.post('https://i.instagram.com/api/v1/accounts/send_verify_email/', data={
-            'device_id': self.mid,
-            'email': self.email
-        })
+        Select(
+            self.driver.find_element(By.XPATH, "//select[@title='Month:']")
+        ).select_by_visible_text(str(self.get_dob()["month"]))
+        time.sleep(random.uniform(1.1, 1.2))
+        Select(
+            self.driver.find_element(By.XPATH, "//select[@title='Day:']")
+        ).select_by_visible_text(str(self.get_dob()["day"]))
+        time.sleep(random.uniform(1.1, 1.2))
+        Select(
+            self.driver.find_element(By.XPATH, "//select[@title='Year:']")
+        ).select_by_visible_text(str(self.get_dob()["year"]))
+        time.sleep(random.uniform(1.1, 1.2))
 
-        global api_key
-        code = Email(api_key, None, self.email_id).waitForEmail()
+        WebDriverWait(self.driver, 40).until(
+            EC.element_to_be_clickable(
+                (
+                    By.XPATH,
+                    "//button[normalize-space()='Next']",
+                )
+            )
+        )
 
-        _______ = self.session.post('https://i.instagram.com/api/v1/accounts/check_confirmation_code/', data={
-            'code': code,
-            'device_id': self.mid,
-            'email': self.email
-        })
+        time.sleep(random.uniform(1.1, 1.2))
+        self.driver.find_element(By.XPATH, "//button[normalize-space()='Next']").click()
 
-        sign_up_code = _______.json()['signup_code']
+        WebDriverWait(self.driver, 40).until(
+            EC.presence_of_element_located(
+                (
+                    By.XPATH,
+                    "//input[@name='confirmationCode']",
+                )
+            )
+        )
 
-        _________ = self.session.post('https://www.instagram.com/accounts/web_create_ajax/', data={
-            'enc_password': f'#PWD_INSTAGRAM_BROWSER:0:{int(datetime.now().timestamp())}:Ethanisnotcool123',
-            'email': self.email,
-            'username': username,
-            'first_name': first_name,
-            'month': month,
-            'day': day,
-            'year': year,
-            'client_id': self.mid,
-            'seamless_login_enabled': 1,
-            'tos_version': 'row',
-            'force_sign_up_code': sign_up_code,
-        })
+        self.sms_code = Phone(self.api_key, self.phone_id).get_code()
+        if self.sms_code is False:
+            return
 
-        if _________.json()['message'] == '':
-            return False
-        else:
-            with open('Accounts.txt','a') as accounts:
-                accounts.write(self.email)
+        for char in str(self.sms_code).strip():
+            self.driver.find_element(
+                By.XPATH, "//input[@name='confirmationCode']"
+            ).send_keys(char)
+            time.sleep(random.uniform(0.34, 0.56))
 
-if __name__ == '__main__':
-    os.system('cls' if os.name=='nt' else 'clear')
+        time.sleep(random.uniform(1.1, 1.2))
+        self.driver.execute_script(
+            """
+            document.querySelector("form[method='POST'] button[type='button']").click();
+        """
+        )
 
-    proxies = open('Proxies.txt','r').read().splitlines()
+        with open("accounts.txt", "a") as accounts:
+            accounts.write(f"{self.username}:{self.password}")
 
-    if proxies == []:
-        proxies = [None]
+        time.sleep(10)
 
-    api_key = input('What is your email api key -> ')
-    domain = input('What is the domain you want to use for emails -> ')
-    amt_of_acc = int(input('How many accounts do you want to make -> '))
-    
-    for x in range(amt_of_acc):
-        init_email = Email(api_key, domain, None).get_email()
-        email = init_email['mail']
-        email_id = init_email['id']
+        self.driver.quit()
 
-        threading.Thread(target=Creation(random.choice(proxies), email, email_id).create_account)
+
+os.system("cls" if os.name == "nt" else "clear")
+Generator(
+    "PROXY",
+    "5sim API KEY",
+).__main__()
